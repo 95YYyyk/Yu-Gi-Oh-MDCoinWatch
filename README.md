@@ -1,4 +1,4 @@
-# MD 投币运势 · MdCoinWatch
+# Yu-Gi-Oh MDCoinWatch
 
 大师决斗的投币运势小浮窗。后台看屏幕，记录每局的**投币胜负**和**实际先后手**，顺手给你一句今日运势。
 
@@ -12,10 +12,10 @@
 
 | 文件 | 大小 | 说明 |
 | --- | --- | --- |
-| `MdCoinWatch.exe` | 约 11 MB | 自带运行时，双击就能跑，换台机器也不用装东西 |
-| `MdCoinWatch-lite.exe` | 约 0.8 MB | 需要先装 .NET 8 运行时，启动更快 |
+| `YuGiOh-MDCoinWatch.exe` | 约 11 MB | 自带运行时，双击就能跑，换台机器也不用装东西 |
+| `YuGiOh-MDCoinWatch-lite.exe` | 约 0.8 MB | 需要先装 .NET 8 运行时，启动更快 |
 
-丢进单独一个文件夹再运行，它会在 exe 旁边生成 `duel_stats.csv`、`MdCoinWatch.ini`、`MdCoinWatch.log`。
+丢进单独一个文件夹再运行，它会在 exe 旁边生成 `duel_stats.csv`、`YuGiOh-MDCoinWatch.ini`、`YuGiOh-MDCoinWatch.log`。
 
 > 仓库里**不含游戏截图**（截图里有玩家 ID），所以 `--selftest` / `--replay` 要指向你自己的截图才能跑。
 
@@ -40,6 +40,13 @@
 
 > 浮窗是画在屏幕上的。如果拖到识别区上面，会读到浮窗自己 —— 程序检测到会显示「浮窗挡住「xxx」」并暂停识别。默认的右上角是安全的。
 
+## 游戏里的样子
+
+完整的 11 张在 [docs/screenshots](docs/screenshots)（对手名字已打码）。
+
+<img src="docs/screenshots/匹配界面.png" width="45%"> <img src="docs/screenshots/我方选择先后手.png" width="45%">
+<img src="docs/screenshots/我方先手.png" width="45%"> <img src="docs/screenshots/后攻进入游戏后的画面.png" width="45%">
+
 ## 怎么跑
 
 1. 游戏分辨率设成 **16:9**（1600x900 / 1920x1080 / 2560x1440 都行），用**窗口**或**无边框窗口**
@@ -47,9 +54,36 @@
 3. 切回游戏正常打
 4. 打完看浮窗，或者打开 exe 同目录的 `duel_stats.csv`
 
-第一次跑如果一直显示「等待游戏」：确认游戏已经开着；进程名不是 `masterduel` 的话，改 `MdCoinWatch.ini` 里的 `process=`。
+第一次跑如果一直显示「等待游戏」：确认游戏已经开着；进程名不是 `masterduel` 的话，改 `YuGiOh-MDCoinWatch.ini` 里的 `process=`。
 
 程序只在游戏处于前台时识别。切出来看数据时会显示「切回游戏」，切回去自动继续。
+
+## 注意事项
+
+**必须要满足的**
+
+1. **游戏用窗口或无边框窗口，别用独占全屏。** 独占全屏下抓屏会拿到黑帧，程序检测到会提示「抓到纯色」并停在那里。
+2. **分辨率用 16:9**（1600x900 / 1920x1080 / 2560x1440 都行）。不是 16:9 会写日志提示，识别位置会偏。
+3. **浮窗不能压在识别区上。** 要读的是屏幕中下部那一条横带（1600x900 下大约 x 560~1040、y 570~755）。压住会被状态提示「浮窗挡住「xxx」」并暂停识别。默认的右上角是安全的。
+4. **识别只在游戏处于前台时进行。** 切出来看数据时会显示「切回游戏」并暂停，切回去自动继续 —— 这是故意的，否则会读到别的窗口。
+5. 点浮窗、拖它、缩放它**都不会抢走游戏焦点**。右键菜单里有「锁定位置与大小」，防止误碰。
+
+**Windows 会拦你一下**
+
+6. exe 没有代码签名，从网上下载后首次运行，SmartScreen 会弹「已阻止……未知发布者」。点「更多信息」→「仍要运行」。杀毒软件也可能误报，加个信任即可。
+7. 首次运行会在 exe 旁边生成 `duel_stats.csv`、`YuGiOh-MDCoinWatch.ini`、`YuGiOh-MDCoinWatch.log`。**建议单独放一个文件夹**，别丢在桌面或下载目录里和一堆文件混着。
+
+**数据与隐私**
+
+8. 程序**不联网**、不写注册表、不读其他进程的内存。它只做两件事：截几个固定的屏幕小区域，往旁边的 CSV 追加一行。
+9. CSV 只记时间、投币胜负、先后手、对局秒数。不记对手是谁、不记卡组、不记你的账号。
+10. 仓库里的示例截图**已抹掉对手的玩家名**，你自己那一侧保留。
+
+**其他**
+
+11. 目前只有简体中文界面。
+12. 只统计**今天**的记录，跨天重新计数，历史都在 CSV 里。
+13. 先后手横幅只闪一两秒。如果日志里反复出现「没捕捉到横幅」，把 ini 里的 `fps` 从 10 提到 20。
 
 ## 识别什么
 
@@ -94,7 +128,7 @@
 
 ## 配置
 
-`MdCoinWatch.ini` 在 exe 旁边，改完重启生效。
+`YuGiOh-MDCoinWatch.ini` 在 exe 旁边，改完重启生效。
 
 ```ini
 textColor=#EEF2F8       # 正文字色
@@ -117,9 +151,9 @@ fps=10                  # 每秒抓帧次数
 界面是主入口；这几个是排查用的，**输出要接管道才看得到**（程序是 WinExe，靠 AttachConsole 挂到调用者的控制台）：
 
 ```powershell
-.\dist\MdCoinWatch.exe --list                    | Out-String
-.\dist\MdCoinWatch.exe --selftest=. --size=1600x900 | Out-String
-.\dist\MdCoinWatch.exe --replay=. --csv=test.csv     | Out-String
+.\dist\YuGiOh-MDCoinWatch.exe --list                    | Out-String
+.\dist\YuGiOh-MDCoinWatch.exe --selftest=. --size=1600x900 | Out-String
+.\dist\YuGiOh-MDCoinWatch.exe --replay=. --csv=test.csv     | Out-String
 ```
 
 | 参数 | 作用 |
@@ -185,6 +219,7 @@ tools/make_templates.py   从截图重新生成识别模板
 tools/make_coin_assets.py 从截图抠硬币图标、生成 ico
 probe/                    可行性分析与离线验证脚本
 docs/widget.png           README 用的界面图
+docs/screenshots/         游戏截图（对手名字已打码）
 build.ps1                 构建脚本
 可行性报告.md              可行性分析报告
 ```
@@ -195,8 +230,8 @@ build.ps1                 构建脚本
 
 ```powershell
 .\build.ps1 -Assets
-.\dist\MdCoinWatch.exe --selftest=. | Out-String
-.\dist\MdCoinWatch.exe --replay=. --csv=test.csv | Out-String
+.\dist\YuGiOh-MDCoinWatch.exe --selftest=. | Out-String
+.\dist\YuGiOh-MDCoinWatch.exe --replay=. --csv=test.csv | Out-String
 ```
 
 ## 声明

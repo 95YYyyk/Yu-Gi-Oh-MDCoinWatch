@@ -17,7 +17,7 @@ internal sealed class Settings
     internal int Fps = 10;
     internal int Width = 300;      // 浮窗逻辑宽度，高度按比例算
 
-    internal static string FilePath => Path.Combine(AppContext.BaseDirectory, "MdCoinWatch.ini");
+    internal static string FilePath => Path.Combine(AppContext.BaseDirectory, "YuGiOh-MDCoinWatch.ini");
 
     internal static Settings Load()
     {
@@ -59,7 +59,7 @@ internal sealed class Settings
         {
             var lines = new[]
             {
-                "# MdCoinWatch 配置。改完保存，重启程序生效。",
+                "# Yu-Gi-Oh MDCoinWatch 配置。改完保存，重启程序生效。",
                 "#",
                 "# 颜色都写 #RRGGBB。textcolor 正文字色，accentcolor 百分比和运势的字色，",
                 "# dimcolor 次要文字色，panelcolor 面板底色，opacity 面板不透明度 25~100。",

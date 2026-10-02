@@ -92,7 +92,7 @@ internal sealed class Widget : IDisposable
 {
     private const double BaseWidth = 300;
     private const double BaseHeight = 124;
-    private const string ClassName = "MdCoinWatchWidget";
+    private const string ClassName = "YuGiOhMDCoinWatchWidget";
     private const int MF_POPUP = 0x00000010;
 
     private static Ui32.WndProc? _keepAlive;
@@ -138,7 +138,7 @@ internal sealed class Widget : IDisposable
         EnsureClass();
         _hwnd = Ui32.CreateWindowExW(
             Ui32.WS_EX_TOPMOST | Ui32.WS_EX_TOOLWINDOW | Ui32.WS_EX_LAYERED | Ui32.WS_EX_NOACTIVATE,
-            ClassName, "MdCoinWatch", Ui32.WS_POPUP, x, y, _w, _h, nint.Zero, nint.Zero, nint.Zero, nint.Zero);
+            ClassName, "Yu-Gi-Oh MDCoinWatch", Ui32.WS_POPUP, x, y, _w, _h, nint.Zero, nint.Zero, nint.Zero, nint.Zero);
         if (_hwnd == nint.Zero) throw new InvalidOperationException("创建窗口失败");
 
         uint d = Ui32.GetDpiForWindow(_hwnd);

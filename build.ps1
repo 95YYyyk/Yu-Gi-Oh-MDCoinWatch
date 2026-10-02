@@ -53,7 +53,7 @@ try {
     }
 
     Write-Host '离线自检（样本截图）:'
-    & 'dist\MdCoinWatch.exe' --selftest='.' -ErrorAction SilentlyContinue | Out-String | Write-Host
+    & 'dist\YuGiOh-MDCoinWatch.exe' --selftest='.' -ErrorAction SilentlyContinue | Out-String | Write-Host
 } finally {
     Pop-Location
 }

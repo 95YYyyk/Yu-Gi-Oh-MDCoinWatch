@@ -6,7 +6,7 @@ namespace MdCoinWatch;
 
 internal static class Program
 {
-    private const string Version = "0.3.0";
+    private const string Version = "1.0";
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool AttachConsole(int dwProcessId);
@@ -38,10 +38,10 @@ internal static class Program
 
         Win32.EnableDpiAwareness();
 
-        using var mutex = new Mutex(true, "Local\\MdCoinWatch.SingleInstance", out bool isNew);
+        using var mutex = new Mutex(true, "Local\\YuGiOh-MDCoinWatch.SingleInstance", out bool isNew);
         if (!isNew)
         {
-            Ui32.MessageBoxW(nint.Zero, "MdCoinWatch 已经在运行了（看屏幕右上角）。", "MdCoinWatch", 0x40);
+            Ui32.MessageBoxW(nint.Zero, "Yu-Gi-Oh MDCoinWatch 已经在运行了（看屏幕右上角）。", "Yu-Gi-Oh MDCoinWatch", 0x40);
             return 0;
         }
 
@@ -49,7 +49,7 @@ internal static class Program
         try { cfg = Settings.Load(); }
         catch { cfg = new Settings(); }
 
-        Log.Init(Path.Combine(AppContext.BaseDirectory, "MdCoinWatch.log"));
+        Log.Init(Path.Combine(AppContext.BaseDirectory, "YuGiOh-MDCoinWatch.log"));
         Log.Write("启动 v" + Version);
 
         var csv = Path.IsPathRooted(cfg.Csv) ? cfg.Csv : Path.Combine(AppContext.BaseDirectory, cfg.Csv);
@@ -75,7 +75,7 @@ internal static class Program
         catch (Exception e)
         {
             Log.Write("界面崩了: " + e);
-            Ui32.MessageBoxW(nint.Zero, e.ToString(), "MdCoinWatch 出错", 0x10);
+            Ui32.MessageBoxW(nint.Zero, e.ToString(), "Yu-Gi-Oh MDCoinWatch 出错", 0x10);
         }
         finally { widget?.Dispose(); }
         Log.Write("退出");

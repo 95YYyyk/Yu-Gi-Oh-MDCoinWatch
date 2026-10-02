@@ -7,7 +7,7 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>MdCoinWatch</AssemblyName>
+    <AssemblyName>YuGiOh-MDCoinWatch</AssemblyName>
     <RootNamespace>MdCoinWatch</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <InvariantGlobalization>true</InvariantGlobalization>
@@ -15,9 +15,9 @@
     <DebugType>none</DebugType>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
-    <Version>0.3.0</Version>
-    <Product>MD 投币运势</Product>
-    <AssemblyTitle>MD 投币运势</AssemblyTitle>
+    <Version>1.0.0</Version>
+    <Product>Yu-Gi-Oh MDCoinWatch</Product>
+    <AssemblyTitle>Yu-Gi-Oh MDCoinWatch</AssemblyTitle>
   </PropertyGroup>
 
   <ItemGroup>

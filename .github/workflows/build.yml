@@ -26,8 +26,8 @@ jobs:
       - name: 归拢产物
         run: |
           New-Item -ItemType Directory -Force -Path release | Out-Null
-          Copy-Item out-full/MdCoinWatch.exe release/MdCoinWatch.exe
-          Copy-Item out-lite/MdCoinWatch.exe release/MdCoinWatch-lite.exe
+          Copy-Item out-full/YuGiOh-MDCoinWatch.exe release/YuGiOh-MDCoinWatch.exe
+          Copy-Item out-lite/YuGiOh-MDCoinWatch.exe release/YuGiOh-MDCoinWatch-lite.exe
           Get-ChildItem release | Format-Table Name, Length
 
       - uses: actions/upload-artifact@v4

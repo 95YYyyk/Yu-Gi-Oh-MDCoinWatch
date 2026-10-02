@@ -52,14 +52,14 @@ try {
     & (Join-Path $root 'build.ps1') -Both
     if ($LASTEXITCODE -ne 0) { throw '编译失败' }
 
-    $full = Join-Path $root 'dist-standalone\MdCoinWatch.exe'
-    $lite = Join-Path $root 'dist\MdCoinWatch.exe'
+    $full = Join-Path $root 'dist-standalone\YuGiOh-MDCoinWatch.exe'
+    $lite = Join-Path $root 'dist\YuGiOh-MDCoinWatch.exe'
     if (-not (Test-Path $full) -or -not (Test-Path $lite)) { throw '找不到编译产物' }
 
     $tmp = Join-Path $env:TEMP ('mdcoinwatch-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-    Copy-Item $full (Join-Path $tmp 'MdCoinWatch.exe')
-    Copy-Item $lite (Join-Path $tmp 'MdCoinWatch-lite.exe')
+    Copy-Item $full (Join-Path $tmp 'YuGiOh-MDCoinWatch.exe')
+    Copy-Item $lite (Join-Path $tmp 'YuGiOh-MDCoinWatch-lite.exe')
 
     Write-Host "== 4/4 发 Release $Tag =="
     $nl = [Environment]::NewLine
@@ -68,10 +68,10 @@ try {
         '',
         '| 文件 | 大小 | 说明 |',
         '| --- | --- | --- |',
-        '| `MdCoinWatch.exe` | 约 11 MB | 自带运行时，双击就能跑，什么都不用装 |',
-        '| `MdCoinWatch-lite.exe` | 约 0.8 MB | 需要 .NET 8 运行时，启动更快 |',
+        '| `YuGiOh-MDCoinWatch.exe` | 约 11 MB | 自带运行时，双击就能跑，什么都不用装 |',
+        '| `YuGiOh-MDCoinWatch-lite.exe` | 约 0.8 MB | 需要 .NET 8 运行时，启动更快 |',
         '',
-        '丢进单独一个文件夹再运行，会在 exe 旁边生成 `duel_stats.csv`、`MdCoinWatch.ini`、`MdCoinWatch.log`。',
+        '丢进单独一个文件夹再运行，会在 exe 旁边生成 `duel_stats.csv`、`YuGiOh-MDCoinWatch.ini`、`YuGiOh-MDCoinWatch.log`。',
         '',
         '## 用法',
         '',
