@@ -9,6 +9,8 @@ app/bin/
 app/obj/
 app/legacy/bin/
 dist/
+dist-share/
+使用说明.txt
 dist-standalone/
 *.user
 
