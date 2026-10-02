@@ -1,0 +1,23 @@
+# 原始游戏截图里有玩家 ID，不进仓库
+/*.png
+/*.jpg
+/新补充截图/
+/docs_demo.csv
+
+# 构建产物
+app/bin/
+app/obj/
+app/legacy/bin/
+dist/
+dist-standalone/
+*.user
+
+# 运行产物
+*.log
+MdCoinWatch.ini
+duel_stats.csv
+
+# 可行性分析跑出来的图
+probe/out/
+probe/out2/
+probe/out3/

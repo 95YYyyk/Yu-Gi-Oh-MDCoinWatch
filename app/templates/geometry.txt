@@ -1,0 +1,6 @@
+reference frame 1920x1080; templates are raw 8-bit grayscale, row major
+kw_first 930 690 100 52   # from 我方先手.png
+kw_second 930 690 100 52   # from 我方后攻.png
+choice_line 780 698 360 44   # from 我方选择先后手.png
+wait_line 680 698 560 44   # from 反面后对手选择先后手.png
+end_row 690 775 555 125   # from 结束失败画面.png

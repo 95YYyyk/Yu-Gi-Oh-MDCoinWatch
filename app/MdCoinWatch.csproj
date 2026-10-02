@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ApplicationIcon>assets\app.ico</ApplicationIcon>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>MdCoinWatch</AssemblyName>
+    <RootNamespace>MdCoinWatch</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType>none</DebugType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <Version>0.3.0</Version>
+    <Product>MD 投币运势</Product>
+    <AssemblyTitle>MD 投币运势</AssemblyTitle>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="templates\*.bin" />
+    <EmbeddedResource Include="assets\*.bgra" />
+    <Compile Remove="legacy\**" />
+    <None Remove="legacy\**" />
+  </ItemGroup>
+
+</Project>
