@@ -19,6 +19,10 @@ internal static class Geometry
     internal static readonly (int x, int y, int w, int h) WaitLine = (680, 698, 560, 44);
     internal static readonly (int x, int y, int w, int h) EndRow = (690, 775, 555, 125);
 
+    /// <summary>结束画面胜负标志（金色皇冠）。左 = 自己赢，右 = 对方赢。</summary>
+    internal static readonly (int x, int y, int w, int h) CrownLeft = (100, 790, 180, 140);
+    internal static readonly (int x, int y, int w, int h) CrownRight = (1640, 790, 180, 140);
+
     internal static int S(int v, double s) => (int)Math.Round(v * s);
 
     /// <summary>把基准坐标换算成实际客户区坐标。实时抓屏和离线自检都走这里。</summary>

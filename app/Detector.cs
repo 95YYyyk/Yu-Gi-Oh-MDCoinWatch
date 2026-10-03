@@ -7,6 +7,7 @@ internal sealed class Detector : IDisposable
     private readonly TemplateSet _ts;
     private readonly Options _o;
     private readonly Region _btnA, _btnB, _choice, _wait, _kw, _end;
+    private readonly Region _crownL, _crownR;
 
     /// <summary>最近一次投币检测里三块区域的最大灰度极差；接近 0 说明抓到的是纯色。</summary>
     internal int LastCoinContrast { get; private set; }
@@ -20,6 +21,8 @@ internal sealed class Detector : IDisposable
         _wait = Box(screenDc, Geometry.WaitLine, sx, sy, Geometry.Margin);
         _kw = Box(screenDc, Geometry.KwBox, sx, sy, Geometry.Margin);
         _end = Box(screenDc, Geometry.EndRow, sx, sy, Geometry.Margin);
+        _crownL = Box(screenDc, Geometry.CrownLeft, sx, sy, 0);
+        _crownR = Box(screenDc, Geometry.CrownRight, sx, sy, 0);
     }
 
     private static int S(int v, double s) => (int)Math.Round(v * s);
@@ -72,6 +75,16 @@ internal sealed class Detector : IDisposable
         return score >= _o.MatchThreshold;
     }
 
+    /// <summary>结束画面的胜负标志：金色皇冠在哪一侧。只在这一屏读，返回 None 就是不写。</summary>
+    internal Result DetectResult(int ox, int oy, out int yellowLeft, out int yellowRight)
+    {
+        _crownL.Grab(ox, oy);
+        _crownR.Grab(ox, oy);
+        yellowLeft = _crownL.CountGold(190, 150, 140, 80);
+        yellowRight = _crownR.CountGold(190, 150, 140, 80);
+        return Core.DecideResult(yellowLeft, yellowRight, _o);
+    }
+
     /// <summary>浮窗是画在屏幕上的，压住哪块识别区哪块就读错。这里检查一下。
     /// </summary>
     internal bool Overlaps(int ox, int oy, Rectangle widget, out string what)
@@ -80,6 +93,7 @@ internal sealed class Detector : IDisposable
                  {
                      (_btnA, "投币按钮"), (_btnB, "投币按钮"), (_kw, "先后手横幅"),
                      (_choice, "选择行"), (_wait, "等待行"), (_end, "结束画面")
+                     , (_crownL, "结束画面胜负标志"), (_crownR, "结束画面胜负标志")
                  })
         {
             var r = new Rectangle(ox + reg.X, oy + reg.Y, reg.W, reg.H);
@@ -101,6 +115,8 @@ internal sealed class Detector : IDisposable
             _wait.SaveBmp(Path.Combine(dir, stamp + "_" + tag + "_wait.bmp"));
             _kw.SaveBmp(Path.Combine(dir, stamp + "_" + tag + "_kw.bmp"));
             _end.SaveBmp(Path.Combine(dir, stamp + "_" + tag + "_end.bmp"));
+            _crownL.SaveBmp(Path.Combine(dir, stamp + "_" + tag + "_crownL.bmp"));
+            _crownR.SaveBmp(Path.Combine(dir, stamp + "_" + tag + "_crownR.bmp"));
         }
         catch (Exception e) { Console.WriteLine("[dump 失败] " + e.Message); }
     }
@@ -109,5 +125,6 @@ internal sealed class Detector : IDisposable
     {
         _btnA.Dispose(); _btnB.Dispose(); _choice.Dispose();
         _wait.Dispose(); _kw.Dispose(); _end.Dispose();
+        _crownL.Dispose(); _crownR.Dispose();
     }
 }

@@ -34,9 +34,9 @@ internal static class SelfTest
         if (files.Length == 0) { Console.WriteLine("目录里没有 PNG。"); return 1; }
 
         Console.WriteLine();
-        Console.WriteLine("{0,-30}{1,8}{2,8}{3,9}{4,9}{5,9}{6,7}{7,7}   {8}",
-            "文件", "先攻", "后攻", "选择行", "等待行", "结束行", "黄A", "黄B", "判定");
-        Console.WriteLine(new string('-', 106));
+        Console.WriteLine("{0,-30}{1,8}{2,8}{3,9}{4,9}{5,9}{6,7}{7,7}{8,7}{9,7}   {10}",
+            "文件", "先攻", "后攻", "选择行", "等待行", "结束行", "黄A", "黄B", "冠左", "冠右", "判定");
+        Console.WriteLine(new string('-', 122));
 
         double[] bufA = Array.Empty<double>(), bufB = Array.Empty<double>();
         foreach (var f in files)
@@ -53,6 +53,8 @@ internal static class SelfTest
 
             int yA = CropYellow(rgb, w, h, Geometry.ScaledBox(Geometry.BtnFirst, fx, fy, 0));
             int yB = CropYellow(rgb, w, h, Geometry.ScaledBox(Geometry.BtnSecond, fx, fy, 0));
+            int yl = CropGold(rgb, w, h, Geometry.ScaledBox(Geometry.CrownLeft, fx, fy, 0));
+            int yr = CropGold(rgb, w, h, Geometry.ScaledBox(Geometry.CrownRight, fx, fy, 0));
             double scC = CropScore(rgb, w, h, Geometry.ScaledBox(Geometry.ChoiceLine, fx, fy, Geometry.Margin), ts.ChoiceLine, ref bufA, ref bufB);
             double scW = CropScore(rgb, w, h, Geometry.ScaledBox(Geometry.WaitLine, fx, fy, Geometry.Margin), ts.WaitLine, ref bufA, ref bufB);
             double scE = CropScore(rgb, w, h, Geometry.ScaledBox(Geometry.EndRow, fx, fy, Geometry.Margin), ts.EndRow, ref bufA, ref bufB);
@@ -62,6 +64,7 @@ internal static class SelfTest
             var coin = Core.DecideCoin(yA, yB, scC, scW, o);
             var turn = Core.DecideTurn(scF, scS, o);
             bool end = scE >= o.MatchThreshold;
+            var result = Core.DecideResult(yl, yr, o);
 
             var v = new List<string>();
             if (coin == Coin.Win) v.Add("投币=胜");
@@ -69,10 +72,12 @@ internal static class SelfTest
             if (turn == Turn.First) v.Add("先攻");
             if (turn == Turn.Second) v.Add("后攻");
             if (end) v.Add("对局结束");
+            if (result == Result.Win) v.Add("自己胜");
+            if (result == Result.Lose) v.Add("对方胜");
             if (v.Count == 0) v.Add("-");
 
-            Console.WriteLine("{0,-30}{1,8:0.000}{2,8:0.000}{3,9:0.000}{4,9:0.000}{5,9:0.000}{6,7}{7,7}   {8}",
-                Short(Path.GetFileName(f)), scF, scS, scC, scW, scE, yA, yB, string.Join(" ", v));
+            Console.WriteLine("{0,-30}{1,8:0.000}{2,8:0.000}{3,9:0.000}{4,9:0.000}{5,9:0.000}{6,7}{7,7}{8,7}{9,7}   {10}",
+                Short(Path.GetFileName(f)), scF, scS, scC, scW, scE, yA, yB, yl, yr, string.Join(" ", v));
         }
         return 0;
     }
@@ -141,10 +146,16 @@ internal static class SelfTest
             var turn = Core.DecideTurn(scF, scS, o);
             bool end = scE >= o.MatchThreshold;
 
-            Console.WriteLine(string.Format("  {0:HH:mm:ss}  {1,-24} 投币={2,-4} 先后手={3,-6} 结束={4}",
-                now, name, Core.CoinText(coin), Core.TurnText(turn), end ? "是" : "否"));
+            int yl = CropGold(rgb, w, h, Geometry.ScaledBox(Geometry.CrownLeft, fx, fy, 0));
+            int yr = CropGold(rgb, w, h, Geometry.ScaledBox(Geometry.CrownRight, fx, fy, 0));
+            var result = end ? Core.DecideResult(yl, yr, o) : Result.None;
+            string resText = Core.ResultText(result);
 
-            if (engine.State == 2) { if (end) engine.OnEnd(now); }
+            Console.WriteLine(string.Format("  {0:HH:mm:ss}  {1,-24} 投币={2,-4} 先后手={3,-6} 结束={4}  胜负={5,-5} 冠左={6,-5} 冠右={7}",
+                now, name, Core.CoinText(coin), Core.TurnText(turn), end ? "是" : "否",
+                resText.Length > 0 ? resText : "-", yl, yr));
+
+            if (engine.State == 2) { if (end) engine.OnEnd(result, now); }
             else if (engine.State == 1) { engine.OnTurn(turn, now); if (engine.State == 1) engine.OnCoin(coin, now); }
             else engine.OnCoin(coin, now);
             engine.Tick(now);
@@ -179,6 +190,10 @@ internal static class SelfTest
 
     private static int CropYellow(byte[] rgb, int w, int h, (int x, int y, int w, int h) r)
         => Core.CountYellow(CropBgra(rgb, w, h, r), 190, 150, 140, 80);
+
+    /// <summary>皇冠用的金色计数，多一条 r >= g，和实时识别那份一致。</summary>
+    private static int CropGold(byte[] rgb, int w, int h, (int x, int y, int w, int h) r)
+        => Core.CountGold(CropBgra(rgb, w, h, r), 190, 150, 140, 80);
 
     private static double CropScore(byte[] rgb, int w, int h, (int x, int y, int w, int h) r,
                                     Template t, ref double[] bufA, ref double[] bufB)

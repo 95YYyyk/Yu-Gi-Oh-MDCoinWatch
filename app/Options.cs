@@ -15,6 +15,8 @@ internal sealed class Options
     internal double MatchThreshold = 0.85;
     internal double TurnThreshold = 0.86;
     internal int ButtonYellowMin = 40;
+    internal int CrownYellowMin = 60;      // 皇冠 ROI 里的金色像素下限
+    internal int CrownPeak = 150;          // 已经数到这个量就直接收工，不用再等淡入
     internal bool Help;
 
     internal static Options Parse(string[] a)

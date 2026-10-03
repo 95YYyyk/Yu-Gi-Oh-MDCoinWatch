@@ -15,7 +15,9 @@ internal sealed class Engine
 
     private DateTime _coinAt, _turnAt;
     private long _rowOffset = -1;
+    private int _rowEpoch;
     private DateTime _rowTime;
+    private Result _result;
 
     internal int State { get; private set; }          // 0 空闲 / 1 已判投币 / 2 对局中
     internal Coin Coin { get; private set; }
@@ -24,6 +26,9 @@ internal sealed class Engine
 
     /// <summary>开局落记录时回调，界面靠它更新统计。</summary>
     internal Action<Coin, Turn>? OnRecorded;
+
+    /// <summary>结束画面判出胜负时回调。</summary>
+    internal Action<Result>? OnResult;
 
     internal Engine(Options o, Recorder rec, Action<string> log)
     {
@@ -51,9 +56,10 @@ internal sealed class Engine
         OpenRow(now);
     }
 
-    internal bool OnEnd(DateTime now)
+    internal bool OnEnd(Result result, DateTime now)
     {
         if (State != 2) return false;
+        _result = result;
         CloseRow("结束画面出现", now, true);
         return true;
     }
@@ -77,7 +83,8 @@ internal sealed class Engine
     private void OpenRow(DateTime now)
     {
         _rowTime = now;
-        _rowOffset = _rec.Append(now, Core.CoinText(Coin), Core.TurnText(Turn), null, "对局开始");
+        _rowEpoch = _rec.Epoch;
+        _rowOffset = _rec.Append(now, Core.CoinText(Coin), Core.TurnText(Turn), null, "", "对局开始");
         Records++;
         _log("[记录] 投币 " + Core.CoinText(Coin) + " / 先后手 " + Core.TurnText(Turn));
         OnRecorded?.Invoke(Coin, Turn);
@@ -89,11 +96,16 @@ internal sealed class Engine
         if (_rowOffset >= 0)
         {
             double? secs = withDuration && _turnAt != default ? (now - _turnAt).TotalSeconds : null;
-            _rec.Rewrite(_rowOffset, _rowTime, Core.CoinText(Coin), Core.TurnText(Turn), secs, why);
+            string res = Core.ResultText(_result);
+            bool written = _rec.Rewrite(_rowOffset, _rowEpoch, _rowTime, Core.CoinText(Coin), Core.TurnText(Turn),
+                                        secs, res, why);
             _log("[更新] 投币 " + Core.CoinText(Coin) + " / 先后手 " + Core.TurnText(Turn)
+                 + " / 胜负 " + (res.Length > 0 ? res : "-")
                  + " / 时长 " + (secs.HasValue ? (int)secs.Value + "s" : "-") + "   (" + why + ")");
+            if (written && _result != Result.None) OnResult?.Invoke(_result);
         }
         _rowOffset = -1;
+        _result = Result.None;
         Coin = Coin.None; Turn = Turn.None; State = 0;
     }
 }

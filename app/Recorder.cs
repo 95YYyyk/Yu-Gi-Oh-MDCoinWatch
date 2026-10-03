@@ -5,7 +5,13 @@ namespace MdCoinWatch;
 
 internal sealed class Recorder
 {
+    private const string Header = "time,coin,turn_order,duel_seconds,result,note";
+
+    private readonly object _gate = new();
     private readonly string _path;
+
+    /// <summary>「清除全部记录」会把它 +1。之前落下的行带着旧 epoch，就不能再按旧偏移改写了。</summary>
+    internal int Epoch { get; private set; }
 
     internal Recorder(string path)
     {
@@ -15,46 +21,66 @@ internal sealed class Recorder
 
         if (!File.Exists(_path) || new FileInfo(_path).Length == 0)
         {
-            File.WriteAllText(_path, "time,coin,turn_order,duel_seconds,note" + Environment.NewLine, new UTF8Encoding(true));
+            File.WriteAllText(_path, Header + Environment.NewLine, new UTF8Encoding(true));
         }
         else
         {
             using var fs = new FileStream(_path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
-            fs.Seek(-1, SeekOrigin.End);
-            if (fs.ReadByte() != '\n') { fs.Seek(0, SeekOrigin.End); fs.WriteByte((byte)'\n'); }
+            if (fs.Length > 0)
+            {
+                fs.Seek(-1, SeekOrigin.End);
+                if (fs.ReadByte() != '\n') { fs.Seek(0, SeekOrigin.End); fs.WriteByte((byte)'\n'); }
+            }
         }
     }
 
     internal string FilePath => _path;
 
-    private static string Line(DateTime when, string coin, string turn, double? seconds, string note)
+    private static string Line(DateTime when, string coin, string turn, double? seconds, string result, string note)
         => string.Join(',',
             when.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
             coin, turn,
             seconds.HasValue ? seconds.Value.ToString("0", CultureInfo.InvariantCulture) : "",
-            note);
+            result, note);
 
-    /// <summary>
-    /// 追加一行，返回这一行在文件里的起始偏移。开局就先落一行，打完再按这个偏移改写。
-    /// </summary>
-    internal long Append(DateTime when, string coin, string turn, double? seconds, string note)
+    /// <summary>追加一行，返回这一行在文件里的起始偏移。开局先落一行，打完按这个偏移改写。</summary>
+    internal long Append(DateTime when, string coin, string turn, double? seconds, string result, string note)
     {
-        var bytes = Encoding.UTF8.GetBytes(Line(when, coin, turn, seconds, note) + Environment.NewLine);
-        using var fs = new FileStream(_path, FileMode.Append, FileAccess.Write, FileShare.Read);
-        long start = fs.Length;
-        fs.Write(bytes, 0, bytes.Length);
-        return start;
+        lock (_gate)
+        {
+            var bytes = Encoding.UTF8.GetBytes(Line(when, coin, turn, seconds, result, note) + Environment.NewLine);
+            using var fs = new FileStream(_path, FileMode.Append, FileAccess.Write, FileShare.Read);
+            long start = fs.Length;
+            fs.Write(bytes, 0, bytes.Length);
+            return start;
+        }
     }
 
-    /// <summary>把之前写的那一行整行改写掉。长度会变，所以先截断再写。</summary>
-    internal void Rewrite(long offset, DateTime when, string coin, string turn, double? seconds, string note)
+    /// <summary>整行改写。长度会变，所以先截断再写。epoch 对不上（中途清过记录）就放弃并返回 false。</summary>
+    internal bool Rewrite(long offset, int epoch, DateTime when, string coin, string turn,
+                          double? seconds, string result, string note)
     {
-        if (offset < 0) return;
-        var bytes = Encoding.UTF8.GetBytes(Line(when, coin, turn, seconds, note) + Environment.NewLine);
-        using var fs = new FileStream(_path, FileMode.Open, FileAccess.Write, FileShare.Read);
-        if (offset > fs.Length) return;
-        fs.SetLength(offset);
-        fs.Seek(offset, SeekOrigin.Begin);
-        fs.Write(bytes, 0, bytes.Length);
+        lock (_gate)
+        {
+            if (offset < 0 || epoch != Epoch) return false;
+            var bytes = Encoding.UTF8.GetBytes(Line(when, coin, turn, seconds, result, note) + Environment.NewLine);
+            using var fs = new FileStream(_path, FileMode.Open, FileAccess.Write, FileShare.Read);
+            if (offset > fs.Length) return false;
+            fs.SetLength(offset);
+            fs.Seek(offset, SeekOrigin.Begin);
+            fs.Write(bytes, 0, bytes.Length);
+            return true;
+        }
+    }
+
+    /// <summary>清空全部记录，只留表头。</summary>
+    internal void Reset()
+    {
+        lock (_gate)
+        {
+            Epoch++;
+            File.WriteAllText(_path, Header + Environment.NewLine, new UTF8Encoding(true));
+        }
     }
 }
+

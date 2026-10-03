@@ -49,6 +49,8 @@ internal static class Ui32
     internal const int TRANSPARENT = 1;
 
     internal const int MF_STRING = 0x00000000;
+    internal const int MF_GRAYED = 0x00000001;
+    internal const int MF_DISABLED = 0x00000002;
     internal const int MF_SEPARATOR = 0x00000800;
     internal const int MF_CHECKED = 0x00000008;
     internal const int TPM_RIGHTBUTTON = 0x0002;

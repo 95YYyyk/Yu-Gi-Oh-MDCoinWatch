@@ -15,7 +15,7 @@
     <DebugType>none</DebugType>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Product>Yu-Gi-Oh MDCoinWatch</Product>
     <AssemblyTitle>Yu-Gi-Oh MDCoinWatch</AssemblyTitle>
   </PropertyGroup>

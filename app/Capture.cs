@@ -75,6 +75,19 @@ internal sealed unsafe class Region : IDisposable
         return c;
     }
 
+    /// <summary>皇冠用的金色计数，比 CountYellow 多一条 r >= g。</summary>
+    internal int CountGold(int minR, int minG, int maxB, int minRB)
+    {
+        var b = _s.Bits;
+        int n = W * H, c = 0;
+        for (int i = 0, p = 0; i < n; i++, p += 4)
+        {
+            int r = b[p + 2], g = b[p + 1], bl = b[p];
+            if (r > minR && g > minG && bl < maxB && r - bl > minRB && r >= g) c++;
+        }
+        return c;
+    }
+
     /// <summary>灰度极差，用来判断这块区域是不是一片纯色（黑屏检测）。</summary>
     internal int Contrast()
     {

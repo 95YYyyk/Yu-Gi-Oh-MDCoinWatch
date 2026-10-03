@@ -95,6 +95,21 @@ internal static class Core
         return c;
     }
 
+    /// <summary>
+    /// 皇冠那种金色 —— 偏红的黄。比 CountYellow 多一条 r >= g，
+    /// 用来排掉菜单高亮那种黄绿色（实测那玩意儿 g 比 r 高，r>=g 一个都不满足）。
+    /// </summary>
+    internal static int CountGold(byte[] bgra, int minR, int minG, int maxB, int minRB)
+    {
+        int c = 0;
+        for (int p = 0; p + 3 < bgra.Length; p += 4)
+        {
+            int b = bgra[p], g = bgra[p + 1], r = bgra[p + 2];
+            if (r > minR && g > minG && b < maxB && r - b > minRB && r >= g) c++;
+        }
+        return c;
+    }
+
     internal static Coin DecideCoin(int yA, int yB, double choiceScore, double waitScore, Options o)
     {
         if (yA >= o.ButtonYellowMin && yB >= o.ButtonYellowMin)
@@ -110,7 +125,22 @@ internal static class Core
 
     internal static string CoinText(Coin c) => c switch { Coin.Win => "WIN", Coin.Lose => "LOSE", _ => "?" };
     internal static string TurnText(Turn t) => t switch { Turn.First => "FIRST", Turn.Second => "SECOND", _ => "?" };
+
+    /// <summary>胜负列写进 CSV 用的字面量。None 写空串，表示没判出来。</summary>
+    internal static string ResultText(Result r) => r switch { Result.Win => "WIN", Result.Lose => "LOSE", _ => "" };
+
+    /// <summary>
+    /// 皇冠在哪一侧。两边都数不到阈值就返回 None —— 宁可漏判，不写错。
+    /// </summary>
+    internal static Result DecideResult(int yellowLeft, int yellowRight, Options o)
+    {
+        // 赢的一侧不但要够多，还要比另一侧多一半以上，免得被零碎金点骗到
+        if (yellowLeft >= o.CrownYellowMin && yellowLeft * 2 > yellowRight * 3) return Result.Win;
+        if (yellowRight >= o.CrownYellowMin && yellowRight * 2 > yellowLeft * 3) return Result.Lose;
+        return Result.None;
+    }
 }
 
 internal enum Coin { None, Win, Lose }
 internal enum Turn { None, First, Second }
+internal enum Result { None, Win, Lose }

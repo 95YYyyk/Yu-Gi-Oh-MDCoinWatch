@@ -20,6 +20,9 @@ internal sealed class Settings
 
     internal static string FilePath => Path.Combine(AppContext.BaseDirectory, "YuGiOh-MDCoinWatch.ini");
 
+    /// <summary>CSV 的绝对路径。程序里所有地方都用它，别各算各的。</summary>
+    internal string CsvPath => Path.IsPathRooted(Csv) ? Csv : Path.Combine(AppContext.BaseDirectory, Csv);
+
     internal static Settings Load()
     {
         var s = new Settings();

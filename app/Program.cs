@@ -6,7 +6,7 @@ namespace MdCoinWatch;
 
 internal static class Program
 {
-    private const string Version = "1.1";
+    private const string Version = "1.2";
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool AttachConsole(int dwProcessId);
@@ -52,18 +52,19 @@ internal static class Program
         Log.Init(Path.Combine(AppContext.BaseDirectory, "YuGiOh-MDCoinWatch.log"));
         Log.Write("启动 v" + Version);
 
-        var csv = Path.IsPathRooted(cfg.Csv) ? cfg.Csv : Path.Combine(AppContext.BaseDirectory, cfg.Csv);
+        var csv = cfg.CsvPath;
         var stats = new Stats();
         stats.LoadCsv(csv);
         Log.Write("今日已有 " + stats.Read().Total + " 条记录   CSV=" + csv);
 
-        var worker = new Thread(() => DetectLoop(stats, cfg, csv)) { IsBackground = true, Name = "detect" };
+        var rec = new Recorder(csv);
+        var worker = new Thread(() => DetectLoop(stats, cfg, rec)) { IsBackground = true, Name = "detect" };
         worker.Start();
 
         Widget? widget = null;
         try
         {
-            widget = new Widget(stats, cfg);
+            widget = new Widget(stats, cfg, rec);
             while (true)
             {
                 int r = Ui32.GetMessageW(out var msg, nint.Zero, 0, 0);
@@ -124,7 +125,7 @@ internal static class Program
         return found;
     }
 
-    private static void DetectLoop(Stats stats, Settings cfg, string csvPath)
+    private static void DetectLoop(Stats stats, Settings cfg, Recorder rec)
     {
         try
         {
@@ -132,10 +133,10 @@ internal static class Program
             if (screenDc == IntPtr.Zero) { Log.Write("取屏幕 DC 失败"); stats.SetStatus("出错了，看日志"); return; }
 
             var baseTs = TemplateSet.Load();
-            var rec = new Recorder(csvPath);
-            var o = new Options { Process = cfg.Process, Csv = csvPath, Fps = cfg.Fps, RequireForeground = true };
+            var o = new Options { Process = cfg.Process, Csv = rec.FilePath, Fps = cfg.Fps, RequireForeground = true };
             var engine = new Engine(o, rec, Log.Write);
             engine.OnRecorded += (c, t) => stats.AddRecord(Core.CoinText(c), Core.TurnText(t));
+            engine.OnResult += stats.AddResult;
 
             int poll = Math.Max(1, 1000 / cfg.Fps);
             IntPtr hwnd = IntPtr.Zero;
@@ -200,7 +201,24 @@ internal static class Program
                 var now = DateTime.Now;
                 if (engine.State == 2)
                 {
-                    if (det.DetectEnd(ox, oy, out _)) engine.OnEnd(now);
+                    if (det.DetectEnd(ox, oy, out _))
+                    {
+                        // 结束画面是淡入的，第一帧里皇冠常常还没亮起来 —— 多采几帧取最大值，
+                        // 数到 CrownPeak 就提前收工。实测过：只采第一帧会得到 33 这种残值。
+                        int yl = 0, yr = 0;
+                        for (int k = 0; k < 10; k++)
+                        {
+                            det.DetectResult(ox, oy, out int a, out int b);
+                            if (a > yl) yl = a;
+                            if (b > yr) yr = b;
+                            if (Math.Max(yl, yr) >= o.CrownPeak) break;
+                            Thread.Sleep(130);
+                        }
+                        var res = Core.DecideResult(yl, yr, o);
+                        Log.Write("[胜负] " + (res == Result.Win ? "WIN" : res == Result.Lose ? "LOSE" : "未判定")
+                                  + "   金色像素 左=" + yl + " 右=" + yr);
+                        engine.OnEnd(res, DateTime.Now);
+                    }
                 }
                 else if (engine.State == 1)
                 {

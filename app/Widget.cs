@@ -91,9 +91,9 @@ internal sealed unsafe class CoinBitmap : IDisposable
 internal sealed class Widget : IDisposable
 {
     private const double BaseWidth = 248;
-    private const double BaseHeight = 96;
+    private const double BaseHeight = 88;
     private const double BodyPt = 10.5;
-    private const double SmallPt = 9.5;
+    private const double SmallPt = 8.5;
     private const int FontWeight = 700;
     private const string ClassName = "YuGiOhMDCoinWatchWidget";
     private const int MF_POPUP = 0x00000010;
@@ -103,6 +103,7 @@ internal sealed class Widget : IDisposable
 
     private readonly Stats _stats;
     private readonly Settings _cfg;
+    private readonly Recorder _rec;
     private nint _hwnd;
     private nint _fontBody, _fontSmall;
     private nint _brPanel, _brBorder, _brDot, _penGrip;
@@ -126,10 +127,11 @@ internal sealed class Widget : IDisposable
 
     internal nint Handle => _hwnd;
 
-    internal Widget(Stats stats, Settings cfg)
+    internal Widget(Stats stats, Settings cfg, Recorder rec)
     {
         _stats = stats;
         _cfg = cfg;
+        _rec = rec;
         _snap = stats.Read();
 
         _dpi = 96;
@@ -341,6 +343,20 @@ internal sealed class Widget : IDisposable
         catch (Exception e) { Log.Write("加载窗口图标失败: " + e.Message); }
     }
 
+    /// <summary>清除全部对局记录。破坏性操作，先弹一个默认选「否」的二次确认。</summary>
+    private void ClearRecords()
+    {
+        int r = Ui32.MessageBoxW(_hwnd,
+            "确定要清除全部对局记录吗？\n\n会把 CSV 里所有记录（含以前几天）都删掉，只留表头。此操作无法撤销。",
+            "清除所有记录", 0x4 | 0x30 | 0x100);          // MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2
+        if (r != 6) return;                                // IDYES
+        _rec.Reset();
+        _stats.Clear();
+        _snap = _stats.Read();
+        Ui32.InvalidateRect(_hwnd, nint.Zero, false);
+        Log.Write("已清除全部对局记录");
+    }
+
     private void Publish()
     {
         int x = 0, y = 0, w = _w, h = _h;
@@ -548,12 +564,32 @@ internal sealed class Widget : IDisposable
         Text(hdc, s.Back.ToString(), x + icon + gap, cy - _hBody / 2, _fontBody, _colorDim);
         Text(hdc, Pct(s.Back, s.Total), x + icon + gap + w2 + gap, cy - _hBody / 2, _fontBody, _colorAccent);
 
-        Text(hdc, "先手 " + s.First, pad, row2, _fontBody, _colorText);
-        Text(hdc, "后手 " + s.Second, colX, row2, _fontBody, _colorText);
+        // 第二行：先/后 12/24   赢/输 4/9
+        // 「/」左边一个颜色、右边一个颜色，前后两组用同一对颜色
+        int cOn = _colorAccent, cOff = _colorText, cSlash = _colorDim;
+        int sp = P(9);
+        int x2 = pad;
+        x2 = Seg(hdc, "先", x2, row2, _fontBody, cOn);
+        x2 = Seg(hdc, "/", x2, row2, _fontBody, cSlash);
+        x2 = Seg(hdc, "后", x2, row2, _fontBody, cOff);
+        x2 += sp;
+        x2 = Seg(hdc, s.First.ToString(), x2, row2, _fontBody, cOn);
+        x2 = Seg(hdc, "/", x2, row2, _fontBody, cSlash);
+        x2 = Seg(hdc, s.Second.ToString(), x2, row2, _fontBody, cOff);
+
+        x2 = colX;
+        x2 = Seg(hdc, "胜", x2, row2, _fontBody, cOn);
+        x2 = Seg(hdc, "/", x2, row2, _fontBody, cSlash);
+        x2 = Seg(hdc, "负", x2, row2, _fontBody, cOff);
+        x2 += sp;
+        x2 = Seg(hdc, s.Wins.ToString(), x2, row2, _fontBody, cOn);
+        x2 = Seg(hdc, "/", x2, row2, _fontBody, cSlash);
+        x2 = Seg(hdc, s.Losses.ToString(), x2, row2, _fontBody, cOff);
 
         int lw = TextW(hdc, "今日运势：", _fontSmall);
         Text(hdc, "今日运势：", pad, row3, _fontSmall, _colorDim);
-        TextClip(hdc, s.Fortune, pad + lw, row3, _w - pad - lw - pad, _fontSmall, _colorAccent);
+        // 右边给缩放示意留一块，别让长文案压上去
+        TextClip(hdc, s.Fortune, pad + lw, row3, _w - pad - lw - pad - P(8), _fontSmall, _colorAccent);
 
         // 状态点
         uint dot = s.Status.StartsWith("已锁定") ? Ui32.Rgb(90, 220, 130)
@@ -572,7 +608,7 @@ internal sealed class Widget : IDisposable
 
         // 右下角缩放示意
         var og = Ui32.SelectObject(hdc, _penGrip);
-        int gx = _w - P(5), gy = _h - P(5), step = P(5);
+        int gx = _w - P(4), gy = _h - P(4), step = P(4);
         for (int i = 1; i <= 3; i++)
         {
             Ui32.MoveToEx(hdc, gx - i * step, gy, nint.Zero);
@@ -619,9 +655,17 @@ internal sealed class Widget : IDisposable
         Ui32.DrawTextW(hdc, s, -1, ref r, Ui32.DT_SINGLELINE | Ui32.DT_NOPREFIX | Ui32.DT_LEFT | Ui32.DT_END_ELLIPSIS);
     }
 
+    /// <summary>画一段文字，返回画完之后的 x。第二行要逐段上色，所以得一段段排。</summary>
+    private int Seg(nint hdc, string s, int x, int y, nint font, int color)
+    {
+        Text(hdc, s, x, y, font, color);
+        return x + TextW(hdc, s, font);
+    }
+
     // ---------- 右键菜单 ----------
     private void ShowMenu()
     {
+        var snap = _stats.Read();
         var menu = Ui32.CreatePopupMenu();
 
         var c1 = Ui32.CreatePopupMenu();
@@ -647,18 +691,16 @@ internal sealed class Widget : IDisposable
             Ui32.AppendMenuW(c3, Ui32.MF_STRING, new nint(id), name);
         Ui32.AppendMenuW(menu, MF_POPUP, c3, "不透明度");
 
-        var c4 = Ui32.CreatePopupMenu();
-        Ui32.AppendMenuW(c4, Ui32.MF_STRING, new nint(31), "小");
-        Ui32.AppendMenuW(c4, Ui32.MF_STRING, new nint(32), "标准");
-        Ui32.AppendMenuW(c4, Ui32.MF_STRING, new nint(33), "大");
-        Ui32.AppendMenuW(c4, Ui32.MF_STRING, new nint(34), "特大");
-        Ui32.AppendMenuW(menu, MF_POPUP, c4, "大小");
+        Ui32.AppendMenuW(menu, Ui32.MF_SEPARATOR, nint.Zero, null!);
+        Ui32.AppendMenuW(menu, Ui32.MF_GRAYED | Ui32.MF_DISABLED, nint.Zero, snap.AllRateText);
 
         Ui32.AppendMenuW(menu, Ui32.MF_SEPARATOR, nint.Zero, null!);
         Ui32.AppendMenuW(menu, Ui32.MF_STRING | (_showInTaskbar ? Ui32.MF_CHECKED : 0), new nint(41), "显示在任务栏");
         Ui32.AppendMenuW(menu, Ui32.MF_STRING | (_locked ? Ui32.MF_CHECKED : 0), new nint(40), "锁定位置与大小");
         Ui32.AppendMenuW(menu, Ui32.MF_STRING, new nint(50), "打开记录文件");
         Ui32.AppendMenuW(menu, Ui32.MF_STRING, new nint(51), "打开配置与日志");
+        Ui32.AppendMenuW(menu, Ui32.MF_SEPARATOR, nint.Zero, null!);
+        Ui32.AppendMenuW(menu, Ui32.MF_STRING, new nint(70), "清除所有记录数据…");
         Ui32.AppendMenuW(menu, Ui32.MF_SEPARATOR, nint.Zero, null!);
         Ui32.AppendMenuW(menu, Ui32.MF_STRING, new nint(60), "退出");
 
@@ -685,14 +727,11 @@ internal sealed class Widget : IDisposable
             case 23: SetOpacity(80); break;
             case 24: SetOpacity(65); break;
             case 25: SetOpacity(50); break;
-            case 31: SetWidth(240); break;
-            case 32: SetWidth(248); break;
-            case 33: SetWidth(330); break;
-            case 34: SetWidth(430); break;
             case 40: _locked = !_locked; break;
             case 41: ToggleTaskbar(); break;
-            case 50: OpenPath(_cfg.Csv); break;
+            case 50: OpenPath(_cfg.CsvPath); break;
             case 51: OpenPath(AppContext.BaseDirectory); break;
+            case 70: ClearRecords(); break;
             case 60: Ui32.PostMessageW(_hwnd, Ui32.WM_CLOSE, nint.Zero, nint.Zero); break;
         }
     }
@@ -712,18 +751,6 @@ internal sealed class Widget : IDisposable
         _cfg.Opacity = v;
         _cfg.Save();
         ApplyOpacity();
-    }
-
-    private void SetWidth(int logical)
-    {
-        _w = Dpi(Math.Clamp(logical, 200, 720));
-        _h = (int)Math.Round(_w * BaseHeight / BaseWidth);
-        Ui32.GetWindowRect(_hwnd, out var r);
-        Ui32.SetWindowPos(_hwnd, new nint(-1), r.Right - _w, r.Top, _w, _h, Ui32.SWP_NOACTIVATE);
-        ApplyShape();
-        MakeFonts();
-        SavePlacement();
-        Ui32.InvalidateRect(_hwnd, nint.Zero, false);
     }
 
     private void PickColor(bool isText)
