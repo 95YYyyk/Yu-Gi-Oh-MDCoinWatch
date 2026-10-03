@@ -6,7 +6,7 @@ namespace MdCoinWatch;
 
 internal static class Program
 {
-    private const string Version = "1.0";
+    private const string Version = "1.1";
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool AttachConsole(int dwProcessId);

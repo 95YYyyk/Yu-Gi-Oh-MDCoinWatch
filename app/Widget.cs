@@ -90,8 +90,11 @@ internal sealed unsafe class CoinBitmap : IDisposable
 /// </summary>
 internal sealed class Widget : IDisposable
 {
-    private const double BaseWidth = 300;
-    private const double BaseHeight = 124;
+    private const double BaseWidth = 248;
+    private const double BaseHeight = 96;
+    private const double BodyPt = 10.5;
+    private const double SmallPt = 9.5;
+    private const int FontWeight = 700;
     private const string ClassName = "YuGiOhMDCoinWatchWidget";
     private const int MF_POPUP = 0x00000010;
 
@@ -112,6 +115,8 @@ internal sealed class Widget : IDisposable
 
     private Snapshot _snap = new();
     private int _colorText = 0xEEF2F8, _colorAccent = 0xFFC53D, _colorDim = 0x7C8496;
+    private bool _showInTaskbar;
+    private nint _icon;
     private bool _locked;
     private bool _moving, _resizing;
     private int _zone;
@@ -128,7 +133,8 @@ internal sealed class Widget : IDisposable
         _snap = stats.Read();
 
         _dpi = 96;
-        _w = Dpi(Math.Clamp(cfg.Width, 240, 720));
+        _showInTaskbar = cfg.ShowInTaskbar;
+        _w = Dpi(Math.Clamp(cfg.Width, 200, 720));
         _h = (int)Math.Round(_w * BaseHeight / BaseWidth);
 
         var wa = Screen_WorkingArea();
@@ -137,19 +143,20 @@ internal sealed class Widget : IDisposable
 
         EnsureClass();
         _hwnd = Ui32.CreateWindowExW(
-            Ui32.WS_EX_TOPMOST | Ui32.WS_EX_TOOLWINDOW | Ui32.WS_EX_LAYERED | Ui32.WS_EX_NOACTIVATE,
-            ClassName, "Yu-Gi-Oh MDCoinWatch", Ui32.WS_POPUP, x, y, _w, _h, nint.Zero, nint.Zero, nint.Zero, nint.Zero);
+            ExStyle(), ClassName, "Yu-Gi-Oh MDCoinWatch", Ui32.WS_POPUP, x, y, _w, _h,
+            nint.Zero, nint.Zero, nint.Zero, nint.Zero);
         if (_hwnd == nint.Zero) throw new InvalidOperationException("创建窗口失败");
 
         uint d = Ui32.GetDpiForWindow(_hwnd);
         if (d > 0) _dpi = (int)d;
-        _w = Dpi(Math.Clamp(cfg.Width, 240, 720));
+        _w = Dpi(Math.Clamp(cfg.Width, 200, 720));
         _h = (int)Math.Round(_w * BaseHeight / BaseWidth);
         Ui32.SetWindowPos(_hwnd, new nint(Ui32.HWND_TOPMOST), x, y, _w, _h, Ui32.SWP_NOACTIVATE);
 
         MakeBrushes();
         MakeFonts();
         LoadCoins();
+        LoadIcon();
         ApplyShape();
         ApplyOpacity();
 
@@ -240,8 +247,8 @@ internal sealed class Widget : IDisposable
         _fontScale = sc;
         if (_fontBody != nint.Zero) Ui32.DeleteObject(_fontBody);
         if (_fontSmall != nint.Zero) Ui32.DeleteObject(_fontSmall);
-        _fontBody = MakeFont(9.5 * sc);
-        _fontSmall = MakeFont(8.5 * sc);
+        _fontBody = MakeFont(BodyPt * sc);
+        _fontSmall = MakeFont(SmallPt * sc);
 
         var hdc = Ui32.GetDC(_hwnd);
         _hBody = MeasureLine(hdc, _fontBody);
@@ -252,7 +259,7 @@ internal sealed class Widget : IDisposable
     private nint MakeFont(double pt)
     {
         int h = -(int)Math.Round(pt * _dpi / 72.0);
-        return Ui32.CreateFontW(h, 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 5, 0, "Microsoft YaHei UI");
+        return Ui32.CreateFontW(h, 0, 0, 0, FontWeight, 0, 0, 0, 1, 0, 0, 5, 0, "Microsoft YaHei UI");
     }
 
     private void LoadCoins()
@@ -289,6 +296,49 @@ internal sealed class Widget : IDisposable
     {
         byte a = (byte)Math.Clamp(_cfg.Opacity * 255 / 100, 20, 255);
         Ui32.SetLayeredWindowAttributes(_hwnd, 0, a, Ui32.LWA_ALPHA);
+    }
+
+    /// <summary>
+    /// 按当前设置拼扩展样式。OBS 的窗口列表会跳过带 WS_EX_TOOLWINDOW 的窗口
+    /// （见 libobs/util/windows/window-helpers.c 的 check_window_valid），
+    /// 所以「显示在任务栏」同时决定了 OBS 能不能在列表里看到这个浮窗。
+    /// </summary>
+    private int ExStyle()
+    {
+        int ex = Ui32.WS_EX_TOPMOST | Ui32.WS_EX_LAYERED | Ui32.WS_EX_NOACTIVATE;
+        if (!_showInTaskbar) ex |= Ui32.WS_EX_TOOLWINDOW;
+        return ex;
+    }
+
+    private void ToggleTaskbar()
+    {
+        _showInTaskbar = !_showInTaskbar;
+        _cfg.ShowInTaskbar = _showInTaskbar;
+        _cfg.Save();
+
+        Ui32.SetWindowLongPtr(_hwnd, Ui32.GWL_EXSTYLE, new nint(ExStyle()));
+        // 任务栏按钮只在这对「隐藏 + 显示」之后才会重新评估
+        Ui32.ShowWindow(_hwnd, Ui32.SW_HIDE);
+        Ui32.ShowWindow(_hwnd, Ui32.SW_SHOWNOACTIVATE);
+        ApplyOpacity();
+        ApplyShape();
+        Publish();
+        Ui32.InvalidateRect(_hwnd, nint.Zero, false);
+        Log.Write("任务栏显示: " + (_showInTaskbar ? "开" : "关"));
+    }
+
+    private void LoadIcon()
+    {
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exe)) return;
+            _icon = Ui32.ExtractIconW(nint.Zero, exe, 0);
+            if (_icon == nint.Zero) return;
+            Ui32.PostMessageW(_hwnd, Ui32.WM_SETICON, new nint(Ui32.ICON_BIG), _icon);
+            Ui32.PostMessageW(_hwnd, Ui32.WM_SETICON, new nint(Ui32.ICON_SMALL), _icon);
+        }
+        catch (Exception e) { Log.Write("加载窗口图标失败: " + e.Message); }
     }
 
     private void Publish()
@@ -431,7 +481,7 @@ internal sealed class Widget : IDisposable
             if (Math.Abs(d) > Math.Abs(delta)) delta = d;
         }
 
-        double newW = Math.Clamp(bw + delta, Dpi(240), Dpi(720));
+        double newW = Math.Clamp(bw + delta, Dpi(200), Dpi(720));
         double newH = newW * BaseHeight / BaseWidth;
         int left = _dragRect.Left, top = _dragRect.Top;
         if (z == 5 || z == 1 || z == 3) left = (int)Math.Round(_dragRect.Right - newW);
@@ -451,7 +501,7 @@ internal sealed class Widget : IDisposable
         Ui32.GetWindowRect(_hwnd, out var r);
         _cfg.X = r.Left;
         _cfg.Y = r.Top;
-        _cfg.Width = Math.Clamp((int)Math.Round(_w * 96.0 / _dpi), 240, 720);
+        _cfg.Width = Math.Clamp((int)Math.Round(_w * 96.0 / _dpi), 200, 720);
         _cfg.Save();
     }
 
@@ -480,7 +530,7 @@ internal sealed class Widget : IDisposable
         Ui32.FillRect(hdc, ref all, _brPanel);
         Ui32.FrameRect(hdc, ref all, _brBorder);
 
-        int pad = P(14), icon = P(31), gap = P(7), colX = P(152), row1 = P(12), row2 = P(55), row3 = P(89);
+        int pad = P(10), icon = P(25), gap = P(6), colX = P(122), row1 = P(8), row2 = P(40), row3 = P(66);
         int cy = row1 + icon / 2;
 
         _coinFront?.Resize(icon, icon);
@@ -605,6 +655,7 @@ internal sealed class Widget : IDisposable
         Ui32.AppendMenuW(menu, MF_POPUP, c4, "大小");
 
         Ui32.AppendMenuW(menu, Ui32.MF_SEPARATOR, nint.Zero, null!);
+        Ui32.AppendMenuW(menu, Ui32.MF_STRING | (_showInTaskbar ? Ui32.MF_CHECKED : 0), new nint(41), "显示在任务栏");
         Ui32.AppendMenuW(menu, Ui32.MF_STRING | (_locked ? Ui32.MF_CHECKED : 0), new nint(40), "锁定位置与大小");
         Ui32.AppendMenuW(menu, Ui32.MF_STRING, new nint(50), "打开记录文件");
         Ui32.AppendMenuW(menu, Ui32.MF_STRING, new nint(51), "打开配置与日志");
@@ -635,10 +686,11 @@ internal sealed class Widget : IDisposable
             case 24: SetOpacity(65); break;
             case 25: SetOpacity(50); break;
             case 31: SetWidth(240); break;
-            case 32: SetWidth(300); break;
-            case 33: SetWidth(400); break;
-            case 34: SetWidth(520); break;
+            case 32: SetWidth(248); break;
+            case 33: SetWidth(330); break;
+            case 34: SetWidth(430); break;
             case 40: _locked = !_locked; break;
+            case 41: ToggleTaskbar(); break;
             case 50: OpenPath(_cfg.Csv); break;
             case 51: OpenPath(AppContext.BaseDirectory); break;
             case 60: Ui32.PostMessageW(_hwnd, Ui32.WM_CLOSE, nint.Zero, nint.Zero); break;
@@ -664,7 +716,7 @@ internal sealed class Widget : IDisposable
 
     private void SetWidth(int logical)
     {
-        _w = Dpi(Math.Clamp(logical, 240, 720));
+        _w = Dpi(Math.Clamp(logical, 200, 720));
         _h = (int)Math.Round(_w * BaseHeight / BaseWidth);
         Ui32.GetWindowRect(_hwnd, out var r);
         Ui32.SetWindowPos(_hwnd, new nint(-1), r.Right - _w, r.Top, _w, _h, Ui32.SWP_NOACTIVATE);
@@ -718,6 +770,7 @@ internal sealed class Widget : IDisposable
         if (_hwnd != nint.Zero) { Ui32.DestroyWindow(_hwnd); _hwnd = nint.Zero; }
         _coinFront?.Dispose();
         _coinBack?.Dispose();
+        if (_icon != nint.Zero) { Ui32.DestroyIcon(_icon); _icon = nint.Zero; }
         foreach (var o in new[] { _fontBody, _fontSmall, _brPanel, _brBorder, _penGrip })
             if (o != nint.Zero) Ui32.DeleteObject(o);
     }

@@ -10,6 +10,13 @@ internal static class Ui32
     internal const int WS_EX_TOOLWINDOW = 0x00000080;
     internal const int WS_EX_LAYERED = 0x00080000;
     internal const int WS_EX_NOACTIVATE = 0x08000000;
+    internal const int WS_EX_APPWINDOW = 0x00040000;
+
+    internal const int GWL_EXSTYLE = -20;
+    internal const int SWP_FRAMECHANGED = 0x0020;
+    internal const int WM_SETICON = 0x0080;
+    internal const int ICON_SMALL = 0;
+    internal const int ICON_BIG = 1;
 
     internal const int WM_PAINT = 0x000F;
     internal const int WM_ERASEBKGND = 0x0014;
@@ -25,6 +32,7 @@ internal static class Ui32
     internal const int WM_DPICHANGED = 0x02E0;
 
     internal const int SW_SHOWNOACTIVATE = 4;
+    internal const int SW_HIDE = 0;
     internal const int LWA_ALPHA = 0x00000002;
     internal const int HWND_TOPMOST = -1;
     internal const int SWP_NOACTIVATE = 0x0010;
@@ -107,6 +115,13 @@ internal static class Ui32
     internal static extern nint DefWindowProcW(nint hwnd, int msg, nint wParam, nint lParam);
     [DllImport("user32.dll")] internal static extern bool DestroyWindow(nint hwnd);
     [DllImport("user32.dll")] internal static extern bool ShowWindow(nint hwnd, int cmd);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+    private static extern nint SetWindowLongPtr64(nint hwnd, int index, nint value);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)]
+    private static extern int SetWindowLong32(nint hwnd, int index, int value);
+    /// <summary>32 位进程里 user32 没有 SetWindowLongPtrW，得退回 SetWindowLongW。</summary>
+    internal static nint SetWindowLongPtr(nint hwnd, int index, nint value)
+        => IntPtr.Size == 8 ? SetWindowLongPtr64(hwnd, index, value) : new nint(SetWindowLong32(hwnd, index, (int)value));
     [DllImport("user32.dll")] internal static extern bool SetWindowPos(nint hwnd, nint after, int x, int y, int cx, int cy, int flags);
     [DllImport("user32.dll")] internal static extern bool GetWindowRect(nint hwnd, out Win32.RECT r);
     [DllImport("user32.dll")] internal static extern bool SetLayeredWindowAttributes(nint hwnd, uint key, byte alpha, int flags);
@@ -175,6 +190,11 @@ internal static class Ui32
 
     [DllImport("comdlg32.dll", CharSet = CharSet.Unicode)]
     internal static extern bool ChooseColorW(ref CHOOSECOLORW cc);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    internal static extern nint ExtractIconW(nint hInst, string exeFileName, uint iconIndex);
+
+    [DllImport("user32.dll")] internal static extern bool DestroyIcon(nint icon);
 
     internal static uint Rgb(byte r, byte g, byte b) => (uint)(r | (g << 8) | (b << 16));
 }

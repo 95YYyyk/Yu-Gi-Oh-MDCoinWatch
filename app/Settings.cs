@@ -15,7 +15,8 @@ internal sealed class Settings
     internal string Csv = "duel_stats.csv";
     internal string Process = "masterduel";
     internal int Fps = 10;
-    internal int Width = 300;      // 浮窗逻辑宽度，高度按比例算
+    internal int Width = 248;      // 浮窗逻辑宽度，高度按比例算
+    internal bool ShowInTaskbar;   // 是否在任务栏显示（OBS 的「窗口采集」要靠它才列得出本窗口）
 
     internal static string FilePath => Path.Combine(AppContext.BaseDirectory, "YuGiOh-MDCoinWatch.ini");
 
@@ -45,7 +46,8 @@ internal sealed class Settings
                     case "csv": s.Csv = v; break;
                     case "process": s.Process = v; break;
                     case "fps": if (int.TryParse(v, out var fp)) s.Fps = Math.Clamp(fp, 2, 60); break;
-                    case "width": if (int.TryParse(v, out var wd)) s.Width = Math.Clamp(wd, 240, 720); break;
+                    case "width": if (int.TryParse(v, out var wd)) s.Width = Math.Clamp(wd, 200, 720); break;
+                    case "showintaskbar": s.ShowInTaskbar = v == "1" || v.Equals("true", StringComparison.OrdinalIgnoreCase); break;
                 }
             }
         }
@@ -75,8 +77,10 @@ internal sealed class Settings
                 "csv=" + Csv,
                 "process=" + Process,
                 "fps=" + Fps.ToString(CultureInfo.InvariantCulture),
-                "# 浮窗宽度 240~720，高度按比例。也可以直接用右键菜单里的「大小」。",
+                "# 浮窗宽度 200~720，高度按比例。也可以直接用右键菜单里的「大小」。",
                 "width=" + Width.ToString(CultureInfo.InvariantCulture),
+                "# 1 = 显示在任务栏，0 = 不显示。OBS 的「窗口采集」需要 1 才能看到本窗口。",
+                "showInTaskbar=" + (ShowInTaskbar ? "1" : "0"),
                 ""
             };
             File.WriteAllText(FilePath, string.Join(Environment.NewLine, lines));
