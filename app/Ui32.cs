@@ -29,9 +29,12 @@ internal static class Ui32
     internal const int WM_RBUTTONUP = 0x0205;
     internal const int WM_NULL = 0x0000;
     internal const int WM_SETCURSOR = 0x0020;
+    internal const int WM_KEYDOWN = 0x0100;
     internal const int WM_DPICHANGED = 0x02E0;
+    internal const int VK_ESCAPE = 0x1B;
 
     internal const int SW_SHOWNOACTIVATE = 4;
+    internal const int SW_SHOW = 5;
     internal const int SW_HIDE = 0;
     internal const int LWA_ALPHA = 0x00000002;
     internal const int HWND_TOPMOST = -1;
@@ -62,6 +65,7 @@ internal static class Ui32
     internal const int IDC_SIZENWSE = 32642;
     internal const int IDC_SIZENESW = 32643;
     internal const int IDC_SIZEALL = 32646;
+    internal const int IDC_HAND = 32649;
 
     internal static readonly nint HWND_TOP = nint.Zero;
 

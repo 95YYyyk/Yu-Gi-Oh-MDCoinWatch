@@ -94,6 +94,7 @@ internal sealed class Widget : IDisposable
     private const double BaseHeight = 88;
     private const double BodyPt = 10.5;
     private const double SmallPt = 8.5;
+    private const double RatePt = 12.5;
     private const int FontWeight = 700;
     private const string ClassName = "YuGiOhMDCoinWatchWidget";
     private const int MF_POPUP = 0x00000010;
@@ -105,13 +106,14 @@ internal sealed class Widget : IDisposable
     private readonly Settings _cfg;
     private readonly Recorder _rec;
     private nint _hwnd;
-    private nint _fontBody, _fontSmall;
+    private nint _fontBody, _fontSmall, _fontRate;
     private nint _brPanel, _brBorder, _brDot, _penGrip;
     private nint _curArrow, _curWE, _curNS, _curNWSE, _curNESW, _curAll;
     private CoinBitmap? _coinFront, _coinBack;
 
     private int _w, _h, _dpi = 96;
-    private int _hBody, _hSmall;
+    private int _baseH = 88;
+    private int _hBody, _hSmall, _hRate;
     private double _fontScale = -1;
 
     private Snapshot _snap = new();
@@ -136,8 +138,9 @@ internal sealed class Widget : IDisposable
 
         _dpi = 96;
         _showInTaskbar = cfg.ShowInTaskbar;
+        _baseH = Layout(cfg).baseH;
         _w = Dpi(Math.Clamp(cfg.Width, 200, 720));
-        _h = (int)Math.Round(_w * BaseHeight / BaseWidth);
+        _h = (int)Math.Round(_w * _baseH / BaseWidth);
 
         var wa = Screen_WorkingArea();
         int x = cfg.X == int.MinValue ? Math.Max(wa.Left, wa.Right - _w - Dpi(24)) : cfg.X;
@@ -152,7 +155,7 @@ internal sealed class Widget : IDisposable
         uint d = Ui32.GetDpiForWindow(_hwnd);
         if (d > 0) _dpi = (int)d;
         _w = Dpi(Math.Clamp(cfg.Width, 200, 720));
-        _h = (int)Math.Round(_w * BaseHeight / BaseWidth);
+        _h = (int)Math.Round(_w * _baseH / BaseWidth);
         Ui32.SetWindowPos(_hwnd, new nint(Ui32.HWND_TOPMOST), x, y, _w, _h, Ui32.SWP_NOACTIVATE);
 
         MakeBrushes();
@@ -249,19 +252,25 @@ internal sealed class Widget : IDisposable
         _fontScale = sc;
         if (_fontBody != nint.Zero) Ui32.DeleteObject(_fontBody);
         if (_fontSmall != nint.Zero) Ui32.DeleteObject(_fontSmall);
+        if (_fontRate != nint.Zero) Ui32.DeleteObject(_fontRate);
         _fontBody = MakeFont(BodyPt * sc);
         _fontSmall = MakeFont(SmallPt * sc);
+        _fontRate = MakeFont(RatePt * sc, 800);
 
         var hdc = Ui32.GetDC(_hwnd);
         _hBody = MeasureLine(hdc, _fontBody);
         _hSmall = MeasureLine(hdc, _fontSmall);
+        _hRate = MeasureLine(hdc, _fontRate);
         Ui32.ReleaseDC(_hwnd, hdc);
     }
 
     private nint MakeFont(double pt)
+        => MakeFont(pt, FontWeight);
+
+    private nint MakeFont(double pt, int weight)
     {
         int h = -(int)Math.Round(pt * _dpi / 72.0);
-        return Ui32.CreateFontW(h, 0, 0, 0, FontWeight, 0, 0, 0, 1, 0, 0, 5, 0, "Microsoft YaHei UI");
+        return Ui32.CreateFontW(h, 0, 0, 0, weight, 0, 0, 0, 1, 0, 0, 5, 0, "Microsoft YaHei UI");
     }
 
     private void LoadCoins()
@@ -298,6 +307,19 @@ internal sealed class Widget : IDisposable
     {
         byte a = (byte)Math.Clamp(_cfg.Opacity * 255 / 100, 20, 255);
         Ui32.SetLayeredWindowAttributes(_hwnd, 0, a, Ui32.LWA_ALPHA);
+    }
+
+    /// <summary>勾选/取消「显示项目」之后重排，并把窗口缩放到新的高度。</summary>
+    private void ApplyVisibility()
+    {
+        _cfg.Save();
+        _baseH = Layout(_cfg).baseH;
+        _h = (int)Math.Round(_w * _baseH / BaseWidth);
+        Ui32.GetWindowRect(_hwnd, out var r);
+        Ui32.SetWindowPos(_hwnd, new nint(-1), r.Left, r.Top, _w, _h, Ui32.SWP_NOACTIVATE);
+        ApplyShape();
+        Publish();
+        Ui32.InvalidateRect(_hwnd, nint.Zero, false);
     }
 
     /// <summary>
@@ -355,6 +377,29 @@ internal sealed class Widget : IDisposable
         _snap = _stats.Read();
         Ui32.InvalidateRect(_hwnd, nint.Zero, false);
         Log.Write("已清除全部对局记录");
+    }
+
+    /// <summary>改最近一局的某一列，然后从 CSV 重新算一遍今天的统计。</summary>
+    private void EditLast(int col, string value)
+    {
+        if (!_rec.EditLast(col, value)) { Log.Write("[修正] 没有可改的记录"); return; }
+        ReloadStats();
+        Log.Write("[修正] " + (col == 1 ? "投币" : col == 2 ? "先后手" : "胜负")
+                  + " 改成 " + (value.Length > 0 ? value : "未判"));
+    }
+
+    private void DeleteLast()
+    {
+        if (!_rec.DeleteLast()) { Log.Write("[修正] 没有可删的记录"); return; }
+        ReloadStats();
+        Log.Write("[修正] 已删除最近一局");
+    }
+
+    private void ReloadStats()
+    {
+        _stats.LoadCsv(_cfg.CsvPath);
+        _snap = _stats.Read();
+        Ui32.InvalidateRect(_hwnd, nint.Zero, false);
     }
 
     private void Publish()
@@ -498,7 +543,7 @@ internal sealed class Widget : IDisposable
         }
 
         double newW = Math.Clamp(bw + delta, Dpi(200), Dpi(720));
-        double newH = newW * BaseHeight / BaseWidth;
+        double newH = newW * _baseH / BaseWidth;
         int left = _dragRect.Left, top = _dragRect.Top;
         if (z == 5 || z == 1 || z == 3) left = (int)Math.Round(_dragRect.Right - newW);
         if (z == 7 || z == 1 || z == 2) top = (int)Math.Round(_dragRect.Bottom - newH);
@@ -546,65 +591,101 @@ internal sealed class Widget : IDisposable
         Ui32.FillRect(hdc, ref all, _brPanel);
         Ui32.FrameRect(hdc, ref all, _brBorder);
 
-        int pad = P(10), icon = P(25), gap = P(6), colX = P(122), row1 = P(8), row2 = P(40), row3 = P(66);
-        int cy = row1 + icon / 2;
+        var (b1, b2, b3, _) = Layout(_cfg);
+        int row1 = b1 < 0 ? -1 : P(b1), row2 = b2 < 0 ? -1 : P(b2), row3 = b3 < 0 ? -1 : P(b3);
+        int pad = P(10), icon = P(25), gap = P(6), colX = P(96), colX2 = P(174);
+        int slot2 = 0;
+        int SlotX(int i) => i == 0 ? pad : i == 1 ? colX : colX2;
 
         _coinFront?.Resize(icon, icon);
         _coinBack?.Resize(icon, icon);
 
-        int x = pad;
-        _coinFront?.Draw(hdc, x, row1);
-        int w1 = TextW(hdc, s.Front.ToString(), _fontBody);
-        Text(hdc, s.Front.ToString(), x + icon + gap, cy - _hBody / 2, _fontBody, _colorDim);
-        Text(hdc, Pct(s.Front, s.Total), x + icon + gap + w1 + gap, cy - _hBody / 2, _fontBody, _colorAccent);
+        // 第一行：正面硬币 + 反面硬币（只留次数）+ 胜率
+        // 反面率不单独显示 —— 100 减去正面率就是它；胜率占原来那个百分比的位置
+        if (row1 >= 0)
+        {
+            int cy = row1 + icon / 2;
+            int rateX = pad;
+            if (_cfg.ShowCoin)
+            {
+                int x = pad;
+                _coinFront?.Draw(hdc, x, row1);
+                int w1 = TextW(hdc, s.Front.ToString(), _fontBody);
+                Text(hdc, s.Front.ToString(), x + icon + gap, cy - _hBody / 2, _fontBody, _colorDim);
+                Text(hdc, Pct(s.Front, s.Total), x + icon + gap + w1 + gap, cy - _hBody / 2, _fontBody, _colorAccent);
 
-        x = colX;
-        _coinBack?.Draw(hdc, x, row1);
-        int w2 = TextW(hdc, s.Back.ToString(), _fontBody);
-        Text(hdc, s.Back.ToString(), x + icon + gap, cy - _hBody / 2, _fontBody, _colorDim);
-        Text(hdc, Pct(s.Back, s.Total), x + icon + gap + w2 + gap, cy - _hBody / 2, _fontBody, _colorAccent);
+                x = colX;
+                _coinBack?.Draw(hdc, x, row1);
+                int w2 = TextW(hdc, s.Back.ToString(), _fontBody);
+                Text(hdc, s.Back.ToString(), x + icon + gap, cy - _hBody / 2, _fontBody, _colorDim);
+                rateX = x + icon + gap + w2 + P(12);
+            }
+            if (_cfg.ShowRate)
+            {
+                var (rr, rg, rb) = Rgb(_cfg.RateColor, 95, 211, 196);
+                int cRate = (int)Ui32.Rgb(rr, rg, rb);
+                int x = Seg(hdc, "胜率", rateX, cy - _hRate / 2, _fontRate, cRate);
+                x += P(6);
+                Seg(hdc, RateText(s), x, cy - _hRate / 2, _fontRate, cRate);
+            }
+        }
 
-        // 第二行：先/后 12/24   赢/输 4/9
-        // 「/」左边一个颜色、右边一个颜色，前后两组用同一对颜色
+        // 第二行：两组统计，显示哪几组由设置决定，按顺序往左补位
         int cOn = _colorAccent, cOff = _colorText, cSlash = _colorDim;
         int sp = P(9);
-        int x2 = pad;
-        x2 = Seg(hdc, "先", x2, row2, _fontBody, cOn);
-        x2 = Seg(hdc, "/", x2, row2, _fontBody, cSlash);
-        x2 = Seg(hdc, "后", x2, row2, _fontBody, cOff);
-        x2 += sp;
-        x2 = Seg(hdc, s.First.ToString(), x2, row2, _fontBody, cOn);
-        x2 = Seg(hdc, "/", x2, row2, _fontBody, cSlash);
-        x2 = Seg(hdc, s.Second.ToString(), x2, row2, _fontBody, cOff);
 
-        x2 = colX;
-        x2 = Seg(hdc, "胜", x2, row2, _fontBody, cOn);
-        x2 = Seg(hdc, "/", x2, row2, _fontBody, cSlash);
-        x2 = Seg(hdc, "负", x2, row2, _fontBody, cOff);
-        x2 += sp;
-        x2 = Seg(hdc, s.Wins.ToString(), x2, row2, _fontBody, cOn);
-        x2 = Seg(hdc, "/", x2, row2, _fontBody, cSlash);
-        x2 = Seg(hdc, s.Losses.ToString(), x2, row2, _fontBody, cOff);
+        if (row2 >= 0)
+        {
+            if (_cfg.ShowTurn)
+            {
+                int x2 = SlotX(slot2++);
+                x2 = Seg(hdc, "先", x2, row2, _fontBody, cOn);
+                x2 = Seg(hdc, "/", x2, row2, _fontBody, cSlash);
+                x2 = Seg(hdc, "后", x2, row2, _fontBody, cOff);
+                x2 += sp;
+                x2 = Seg(hdc, s.First.ToString(), x2, row2, _fontBody, cOn);
+                x2 = Seg(hdc, "/", x2, row2, _fontBody, cSlash);
+                x2 = Seg(hdc, s.Second.ToString(), x2, row2, _fontBody, cOff);
+            }
+            if (_cfg.ShowResult)
+            {
+                int x2 = SlotX(slot2++);
+                x2 = Seg(hdc, "胜", x2, row2, _fontBody, cOn);
+                x2 = Seg(hdc, "/", x2, row2, _fontBody, cSlash);
+                x2 = Seg(hdc, "负", x2, row2, _fontBody, cOff);
+                x2 += sp;
+                x2 = Seg(hdc, s.Wins.ToString(), x2, row2, _fontBody, cOn);
+                x2 = Seg(hdc, "/", x2, row2, _fontBody, cSlash);
+                x2 = Seg(hdc, s.Losses.ToString(), x2, row2, _fontBody, cOff);
+            }
+        }
 
-        int lw = TextW(hdc, "今日运势：", _fontSmall);
-        Text(hdc, "今日运势：", pad, row3, _fontSmall, _colorDim);
-        // 右边给缩放示意留一块，别让长文案压上去
-        TextClip(hdc, s.Fortune, pad + lw, row3, _w - pad - lw - pad - P(8), _fontSmall, _colorAccent);
+        // 第三行：今日运势
+        if (row3 >= 0)
+        {
+            int lw = TextW(hdc, "今日运势：", _fontSmall);
+            Text(hdc, "今日运势：", pad, row3, _fontSmall, _colorDim);
+            // 右边给缩放示意留一块，别让长文案压上去
+            TextClip(hdc, s.Fortune, pad + lw, row3, _w - pad - lw - pad - P(8), _fontSmall, _colorAccent);
+        }
 
-        // 状态点
-        uint dot = s.Status.StartsWith("已锁定") ? Ui32.Rgb(90, 220, 130)
-                 : s.Status.StartsWith("对局中") ? Ui32.Rgb(255, 197, 61)
-                 : Ui32.Rgb(110, 118, 134);
-        var br = Ui32.CreateSolidBrush(dot);
-        var pn = Ui32.CreatePen(0, 1, dot);
-        var o1 = Ui32.SelectObject(hdc, br);
-        var o2 = Ui32.SelectObject(hdc, pn);
-        int d = Math.Max(5, P(8));
-        Ui32.Ellipse(hdc, _w - pad - d, P(14), _w - pad, P(14) + d);
-        Ui32.SelectObject(hdc, o1);
-        Ui32.SelectObject(hdc, o2);
-        Ui32.DeleteObject(br);
-        Ui32.DeleteObject(pn);
+        // 状态点：跟着第一行走，第一行藏了就不画
+        if (row1 >= 0)
+        {
+            uint dot = s.Status.StartsWith("已锁定") ? Ui32.Rgb(90, 220, 130)
+                     : s.Status.StartsWith("对局中") ? Ui32.Rgb(255, 197, 61)
+                     : Ui32.Rgb(110, 118, 134);
+            var br = Ui32.CreateSolidBrush(dot);
+            var pn = Ui32.CreatePen(0, 1, dot);
+            var o1 = Ui32.SelectObject(hdc, br);
+            var o2 = Ui32.SelectObject(hdc, pn);
+            int d = Math.Max(5, P(8));
+            Ui32.Ellipse(hdc, _w - pad - d, row1 + P(6), _w - pad, row1 + P(6) + d);
+            Ui32.SelectObject(hdc, o1);
+            Ui32.SelectObject(hdc, o2);
+            Ui32.DeleteObject(br);
+            Ui32.DeleteObject(pn);
+        }
 
         // 右下角缩放示意
         var og = Ui32.SelectObject(hdc, _penGrip);
@@ -615,6 +696,25 @@ internal sealed class Widget : IDisposable
             Ui32.LineTo(hdc, gx, gy - i * step);
         }
         Ui32.SelectObject(hdc, og);
+    }
+
+    /// <summary>按当前「显示项目」算三行的 y 坐标和基准高度。行藏了就往上顶。</summary>
+    private static (int r1, int r2, int r3, int baseH) Layout(Settings c)
+    {
+        bool row1 = c.ShowCoin || c.ShowRate;
+        bool stats = c.ShowTurn || c.ShowResult;
+        int y = 8, r1 = -1, r2 = -1, r3 = -1;
+        if (row1) { r1 = y; y += 25; if (stats || c.ShowFortune) y += 7; }
+        if (stats) { r2 = y; y += 19; if (c.ShowFortune) y += 7; }
+        if (c.ShowFortune) { r3 = y; y += 16; }
+        return (r1, r2, r3, Math.Max(34, y + 6));
+    }
+
+    /// <summary>胜率。一局胜负都没判出来时显示 --。</summary>
+    private static string RateText(Snapshot s)
+    {
+        int settled = s.Wins + s.Losses;
+        return settled == 0 ? "--" : Math.Round(100.0 * s.Wins / settled) + "%";
     }
 
     private static string Pct(int n, int total) => total == 0 ? "--" : Math.Round(100.0 * n / total) + "%";
@@ -691,14 +791,39 @@ internal sealed class Widget : IDisposable
             Ui32.AppendMenuW(c3, Ui32.MF_STRING, new nint(id), name);
         Ui32.AppendMenuW(menu, MF_POPUP, c3, "不透明度");
 
+        var c4 = Ui32.CreatePopupMenu();
+        Ui32.AppendMenuW(c4, Ui32.MF_STRING | (_cfg.ShowCoin ? Ui32.MF_CHECKED : 0), new nint(81), "投币统计");
+        Ui32.AppendMenuW(c4, Ui32.MF_STRING | (_cfg.ShowTurn ? Ui32.MF_CHECKED : 0), new nint(82), "先后手");
+        Ui32.AppendMenuW(c4, Ui32.MF_STRING | (_cfg.ShowResult ? Ui32.MF_CHECKED : 0), new nint(83), "对局胜负");
+        Ui32.AppendMenuW(c4, Ui32.MF_STRING | (_cfg.ShowRate ? Ui32.MF_CHECKED : 0), new nint(84), "胜率");
+        Ui32.AppendMenuW(c4, Ui32.MF_STRING | (_cfg.ShowFortune ? Ui32.MF_CHECKED : 0), new nint(85), "今日运势");
+        Ui32.AppendMenuW(menu, MF_POPUP, c4, "显示项目");
+
         Ui32.AppendMenuW(menu, Ui32.MF_SEPARATOR, nint.Zero, null!);
         Ui32.AppendMenuW(menu, Ui32.MF_GRAYED | Ui32.MF_DISABLED, nint.Zero, snap.AllRateText);
 
         Ui32.AppendMenuW(menu, Ui32.MF_SEPARATOR, nint.Zero, null!);
         Ui32.AppendMenuW(menu, Ui32.MF_STRING | (_showInTaskbar ? Ui32.MF_CHECKED : 0), new nint(41), "显示在任务栏");
         Ui32.AppendMenuW(menu, Ui32.MF_STRING | (_locked ? Ui32.MF_CHECKED : 0), new nint(40), "锁定位置与大小");
+
+        var c5 = Ui32.CreatePopupMenu();
+        Ui32.AppendMenuW(c5, Ui32.MF_STRING, new nint(91), "投币 = 胜");
+        Ui32.AppendMenuW(c5, Ui32.MF_STRING, new nint(92), "投币 = 负");
+        Ui32.AppendMenuW(c5, Ui32.MF_SEPARATOR, nint.Zero, null!);
+        Ui32.AppendMenuW(c5, Ui32.MF_STRING, new nint(93), "先后手 = 先");
+        Ui32.AppendMenuW(c5, Ui32.MF_STRING, new nint(94), "先后手 = 后");
+        Ui32.AppendMenuW(c5, Ui32.MF_SEPARATOR, nint.Zero, null!);
+        Ui32.AppendMenuW(c5, Ui32.MF_STRING, new nint(95), "胜负 = 胜");
+        Ui32.AppendMenuW(c5, Ui32.MF_STRING, new nint(96), "胜负 = 负");
+        Ui32.AppendMenuW(c5, Ui32.MF_STRING, new nint(97), "胜负 = 未判");
+        Ui32.AppendMenuW(c5, Ui32.MF_SEPARATOR, nint.Zero, null!);
+        Ui32.AppendMenuW(c5, Ui32.MF_STRING, new nint(99), "从 CSV 重新载入");
+        Ui32.AppendMenuW(c5, Ui32.MF_STRING, new nint(98), "删除最近一局");
+        Ui32.AppendMenuW(menu, MF_POPUP, c5, "修正最近一局");
+
         Ui32.AppendMenuW(menu, Ui32.MF_STRING, new nint(50), "打开记录文件");
         Ui32.AppendMenuW(menu, Ui32.MF_STRING, new nint(51), "打开配置与日志");
+        Ui32.AppendMenuW(menu, Ui32.MF_STRING, new nint(52), "关于与更新…");
         Ui32.AppendMenuW(menu, Ui32.MF_SEPARATOR, nint.Zero, null!);
         Ui32.AppendMenuW(menu, Ui32.MF_STRING, new nint(70), "清除所有记录数据…");
         Ui32.AppendMenuW(menu, Ui32.MF_SEPARATOR, nint.Zero, null!);
@@ -731,6 +856,21 @@ internal sealed class Widget : IDisposable
             case 41: ToggleTaskbar(); break;
             case 50: OpenPath(_cfg.CsvPath); break;
             case 51: OpenPath(AppContext.BaseDirectory); break;
+            case 52: About.Show(_hwnd, _cfg); break;
+            case 91: EditLast(1, "WIN"); break;
+            case 92: EditLast(1, "LOSE"); break;
+            case 93: EditLast(2, "FIRST"); break;
+            case 94: EditLast(2, "SECOND"); break;
+            case 95: EditLast(4, "WIN"); break;
+            case 96: EditLast(4, "LOSE"); break;
+            case 97: EditLast(4, ""); break;
+            case 98: DeleteLast(); break;
+            case 99: ReloadStats(); break;
+            case 81: _cfg.ShowCoin = !_cfg.ShowCoin; ApplyVisibility(); break;
+            case 82: _cfg.ShowTurn = !_cfg.ShowTurn; ApplyVisibility(); break;
+            case 83: _cfg.ShowResult = !_cfg.ShowResult; ApplyVisibility(); break;
+            case 84: _cfg.ShowRate = !_cfg.ShowRate; ApplyVisibility(); break;
+            case 85: _cfg.ShowFortune = !_cfg.ShowFortune; ApplyVisibility(); break;
             case 70: ClearRecords(); break;
             case 60: Ui32.PostMessageW(_hwnd, Ui32.WM_CLOSE, nint.Zero, nint.Zero); break;
         }
@@ -775,7 +915,7 @@ internal sealed class Widget : IDisposable
         finally { Marshal.FreeHGlobal(cust); }
     }
 
-    private static void OpenPath(string path)
+    internal static void OpenPath(string path)
     {
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
         catch (Exception e) { Log.Write("打开失败 " + path + ": " + e.Message); }
@@ -798,7 +938,7 @@ internal sealed class Widget : IDisposable
         _coinFront?.Dispose();
         _coinBack?.Dispose();
         if (_icon != nint.Zero) { Ui32.DestroyIcon(_icon); _icon = nint.Zero; }
-        foreach (var o in new[] { _fontBody, _fontSmall, _brPanel, _brBorder, _penGrip })
+        foreach (var o in new[] { _fontBody, _fontSmall, _fontRate, _brPanel, _brBorder, _penGrip })
             if (o != nint.Zero) Ui32.DeleteObject(o);
     }
 }

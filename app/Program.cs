@@ -6,7 +6,7 @@ namespace MdCoinWatch;
 
 internal static class Program
 {
-    private const string Version = "1.2";
+    internal const string Version = "1.3";
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool AttachConsole(int dwProcessId);
@@ -37,6 +37,17 @@ internal static class Program
         }
 
         Win32.EnableDpiAwareness();
+
+        if (args.Any(a => a == "--about"))
+        {
+            About.Show(nint.Zero, Settings.Load());
+            while (Ui32.GetMessageW(out var am, nint.Zero, 0, 0) > 0)
+            {
+                Ui32.TranslateMessage(ref am);
+                Ui32.DispatchMessageW(ref am);
+            }
+            return 0;
+        }
 
         using var mutex = new Mutex(true, "Local\\YuGiOh-MDCoinWatch.SingleInstance", out bool isNew);
         if (!isNew)
@@ -144,6 +155,7 @@ internal static class Program
             double sx = 0, sy = 0;
             string title = "";
             string lastStatus = "";
+            DateTime lastDiag = DateTime.MinValue;
 
             void Status(string s)
             {
@@ -180,8 +192,10 @@ internal static class Program
                 {
                     det?.Dispose();
                     sx = nsx; sy = nsy;
+                    // 按钮黄是绝对像素数，分辨率越低越少。按面积缩放，别让 720p 卡在阈值边上。
+                    o.ButtonYellowMin = Math.Max(12, (int)Math.Round(40 * sx * sy));
                     det = new Detector(screenDc, baseTs.Scaled(sx, sy), sx, sy, o);
-                    Log.Write(string.Format("客户区 {0}x{1}  缩放 x{2:0.0000} y{3:0.0000}", cw, chh, sx, sy));
+                    Log.Write(string.Format("客户区 {0}x{1}  缩放 x{2:0.0000} y{3:0.0000}  按钮黄阈值 {4}", cw, chh, sx, sy, o.ButtonYellowMin));
                     if (Math.Abs(sx - sy) > 0.004)
                         Log.Write("注意：客户区不是 16:9，识别位置会被拉伸");
                 }
@@ -228,7 +242,14 @@ internal static class Program
                 }
                 else
                 {
-                    engine.OnCoin(det.DetectCoin(ox, oy, out _, out _, out _, out _), now);
+                    var coin = det.DetectCoin(ox, oy, out int cyA, out int cyB, out double cSc, out double wSc);
+                    engine.OnCoin(coin, now);
+                    if (coin == Coin.None && (now - lastDiag).TotalSeconds >= 5)
+                    {
+                        lastDiag = now;
+                        Log.Write(string.Format("[诊断] 黄A={0} 黄B={1} 选择行={2:0.000} 等待行={3:0.000} 阈值={4}",
+                            cyA, cyB, cSc, wSc, o.ButtonYellowMin));
+                    }
                 }
                 engine.Tick(now);
 

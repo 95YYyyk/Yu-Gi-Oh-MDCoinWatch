@@ -73,6 +73,57 @@ internal sealed class Recorder
         }
     }
 
+    /// <summary>找最后一行的下标（跳过表头和空行）。没有就返回 -1。</summary>
+    private static int LastDataIndex(List<string> lines)
+        => lines.FindLastIndex(l => l.Length > 0 && l.Contains(',') && !l.StartsWith("time,", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// 改最后一行的某一列。col：1 = 投币，2 = 先后手，4 = 胜负。
+    /// 只改最后一行，前面的偏移不动，所以引擎手里待改写的偏移仍然有效。
+    /// </summary>
+    internal bool EditLast(int col, string value)
+    {
+        lock (_gate)
+        {
+            try
+            {
+                if (!File.Exists(_path)) return false;
+                var lines = File.ReadAllLines(_path).ToList();
+                int idx = LastDataIndex(lines);
+                if (idx < 0) return false;
+                var f = lines[idx].Split(',').ToList();
+                // 老格式只有 5 列（第 5 列是备注），别把它当胜负改掉
+                if (f.Count < 6) return false;
+                if (col < 0 || col >= f.Count) return false;
+                f[col] = value;
+                lines[idx] = string.Join(',', f);
+                File.WriteAllText(_path, string.Join(Environment.NewLine, lines) + Environment.NewLine, new UTF8Encoding(true));
+                return true;
+            }
+            catch (Exception e) { Log.Write("[修正] 写 CSV 失败: " + e.Message); return false; }
+        }
+    }
+
+    /// <summary>删掉最后一行。会让引擎手里待改写的偏移作废。</summary>
+    internal bool DeleteLast()
+    {
+        lock (_gate)
+        {
+            try
+            {
+                if (!File.Exists(_path)) return false;
+                var lines = File.ReadAllLines(_path).ToList();
+                int idx = LastDataIndex(lines);
+                if (idx < 0) return false;
+                lines.RemoveAt(idx);
+                File.WriteAllText(_path, string.Join(Environment.NewLine, lines) + Environment.NewLine, new UTF8Encoding(true));
+                Epoch++;
+                return true;
+            }
+            catch (Exception e) { Log.Write("[修正] 删行失败: " + e.Message); return false; }
+        }
+    }
+
     /// <summary>清空全部记录，只留表头。</summary>
     internal void Reset()
     {
